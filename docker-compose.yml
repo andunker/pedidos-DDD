@@ -1,0 +1,76 @@
+# 🐳 Docker Compose para Pedidos DDD - Arquitectura Hexagonal
+# Demuestra la flexibilidad: H2 (desarrollo) vs PostgreSQL (producción)
+
+version: '3.8'
+
+services:
+  # 🚀 Aplicación Spring Boot con Arquitectura Hexagonal
+  pedidos-app:
+    build: .
+    container_name: pedidos-hexagonal
+    ports:
+      - "8080:8080"
+    environment:
+      # Configuración para H2 (desarrollo rápido)
+      - SPRING_PROFILES_ACTIVE=docker,h2
+      - SPRING_DATASOURCE_URL=jdbc:h2:mem:pedidosdb
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      - SPRING_H2_CONSOLE_ENABLED=true
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      - SPRING_JPA_SHOW_SQL=true
+    networks:
+      - pedidos-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      # Volumen para logs (opcional)
+      - ./logs:/app/logs
+
+  # 🗄️ PostgreSQL (alternativa para mostrar flexibilidad hexagonal)
+  postgres:
+    image: postgres:15-alpine
+    container_name: pedidos-postgres
+    environment:
+      POSTGRES_DB: pedidosdb
+      POSTGRES_USER: pedidos_user
+      POSTGRES_PASSWORD: pedidos_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - pedidos-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pedidos_user -d pedidosdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - postgresql  # Solo se ejecuta con: docker-compose --profile postgresql up
+
+  # 📊 Adminer para gestión de base de datos (opcional)
+  adminer:
+    image: adminer:latest
+    container_name: pedidos-adminer
+    ports:
+      - "8081:8080"
+    networks:
+      - pedidos-network
+    profiles:
+      - tools  # Solo se ejecuta con: docker-compose --profile tools up
+
+# 🌐 Red para comunicación entre contenedores
+networks:
+  pedidos-network:
+    driver: bridge
+
+# 💾 Volúmenes persistentes
+volumes:
+  postgres_data:
+    driver: local 
